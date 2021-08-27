@@ -8,6 +8,14 @@ const express = require('express');
 // https://www.npmjs.com/package/body-parser
 const bodyParser = require('body-parser');
 
+const Firestore = require("@google-cloud/firestore");
+
+const firestore = new Firestore(
+    {
+        projectId: process.env.GOOGLE_CLOUD_PROJECT
+    }
+);
+
 // create the server
 const app = express();
 
@@ -16,7 +24,7 @@ app.use(bodyParser.json());
 
 // mock events data - for a real solution this data should be coming 
 // from a cloud data store
-const mockEvents = {
+var mockEvents = {
     events: [
         { title: 'An event', id: 1, description: 'Something really cool' },
         { title: 'Another event', id: 2, description: 'Something even cooler' }
@@ -40,8 +48,31 @@ app.get('/version', (req, res) => {
 // mock events endpoint. this would be replaced by a call to a datastore
 // if you went on to develop this as a real application.
 app.get('/events', (req, res) => {
-    res.json(mockEvents);
+    //res.json(mockEvents);
+    getEvents(req, res);
 });
+
+function getEvents(req, res) {
+    firestore.collection("Events").get()
+        .then((snapshot) => {
+            if (!snapshot.empty) {
+                const ret = { events: []};
+                snapshot.docs.forEach(element => {
+                    ret.events.push(element.data());
+                }, this);
+                mockEvents = ret;
+                console.log(ret);
+                res.json(ret);
+            } else {
+                 res.json(mockEvents);
+            }
+        })
+        .catch((err) => {
+            console.error('Error getting events', err);
+            res.json(mockEvents);
+        });
+};
+
 
 // Adds an event - in a real solution, this would insert into a cloud datastore.
 // Currently this simply adds an event to the mock array in memory
@@ -54,9 +85,14 @@ app.post('/event', (req, res) => {
         id : mockEvents.events.length + 1
      }
     // add to the mock array
-    mockEvents.events.push(ev);
+    //mockEvents.events.push(ev);
     // return the complete array
-    res.json(mockEvents);
+    //res.json(mockEvents);
+
+    firestore.collection("Events").add(ev).then(ret => {
+        getEvents(req, res);
+    });
+
 });
 
 app.use((err, req, res, next) => {
